@@ -52,37 +52,74 @@ func (h *TODOHandler) Delete(ctx context.Context, req *model.DeleteTODORequest) 
 
 func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request){
 	//HTTP メソッドが Post の場合を判定
-	if(r.Method != http.MethodPost){
-		return
+	if(r.Method == http.MethodPost){
+		serveHTTPPost(w,r,h)
+	}else if(r.Method == http.MethodPut){
+		serveHTTPPut(w,r,h)
 	}
 
-	//CreateTODORequest に JSON Decode を行おう
-	var request = model.CreateTODORequest{}
+	
+}
+
+func serveHTTPPost(w http.ResponseWriter, r *http.Request,h *TODOHandler){
+//CreateTODORequest に JSON Decode を行おう
+var request = model.CreateTODORequest{}
+if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	log.Println(err)
+	return
+}
+
+if request.Subject == "" {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	return
+}
+
+//引数の r から r.Context() を呼び出し
+context := r.Context()
+
+//CreateTODO メソッドに呼び出し DB に TODO を保存
+resp,err:= h.Create(context,&request);
+if err != nil {
+	log.Println(err)
+	return
+}
+
+//保存した TODO を CreateTODOResponse に代入し
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusOK)
+
+//JSON Encode を行い HTTP Response を返そう
+err = json.NewEncoder(w).Encode(resp)
+if(err != nil){
+	println(err)
+	return
+}
+}
+
+func serveHTTPPut(w http.ResponseWriter, r *http.Request,h *TODOHandler){
+	var request = model.UpdateTODORequest{}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		log.Println(err)
 		return
 	}
 
-	if request.Subject == "" {
+	if request.Subject == "" || request.ID == 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	//引数の r から r.Context() を呼び出し
 	context := r.Context()
-
-	//CreateTODO メソッドに呼び出し DB に TODO を保存
-	resp,err:= h.Create(context,&request);
+	resp,err := h.Update(context,&request)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-
-	//保存した TODO を CreateTODOResponse に代入し
+	
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-
+	
 	//JSON Encode を行い HTTP Response を返そう
 	err = json.NewEncoder(w).Encode(resp)
 	if(err != nil){

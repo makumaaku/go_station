@@ -32,11 +32,11 @@ func (s *TODOService) CreateTODO(ctx context.Context, subject, description strin
 		return &todo, sqlite3.ErrConstraint
 	}
 
-	stmt, err := s.db.PrepareContext(ctx, insert)
-	result, err := stmt.ExecContext(ctx, subject, description)
-	todo.ID, err = result.LastInsertId()
+	stmt, _ := s.db.PrepareContext(ctx, insert)
+	result, _ := stmt.ExecContext(ctx, subject, description)
+	todo.ID, _ = result.LastInsertId()
 	row := s.db.QueryRowContext(ctx, confirm, todo.ID)
-	err = row.Scan(&todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
+	err := row.Scan(&todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
 
 	return &todo, err
 }
@@ -48,7 +48,32 @@ func (s *TODOService) ReadTODO(ctx context.Context, prevID, size int64) ([]*mode
 		readWithID = `SELECT id, subject, description, created_at, updated_at FROM todos WHERE id < ? ORDER BY id DESC LIMIT ?`
 	)
 
-	return nil, nil
+	todos := make([]*model.TODO,0)
+	if prevID == 0{
+		rows,_ := s.db.QueryContext(ctx,read,size)
+		for rows.Next(){
+			var todo model.TODO
+				err := rows.Scan(&todo.ID, &todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
+				if(err != nil){
+					panic(err)
+				}
+
+			todos = append(todos, &todo)
+		}
+	}else{
+		rows,_ := s.db.QueryContext(ctx,readWithID,prevID,size)
+		for rows.Next(){
+			var todo model.TODO
+				err := rows.Scan(&todo.ID, &todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
+				if(err != nil){
+					panic(err)
+				}
+
+			todos = append(todos, &todo)
+		}
+	}
+
+	return todos, nil
 }
 
 // UpdateTODO updates the TODO on DB.

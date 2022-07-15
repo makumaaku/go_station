@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/TechBowl-japan/go-stations/model"
 	"github.com/TechBowl-japan/go-stations/service"
@@ -32,8 +33,16 @@ func (h *TODOHandler) Create(ctx context.Context, req *model.CreateTODORequest) 
 
 // Read handles the endpoint that reads the TODOs.
 func (h *TODOHandler) Read(ctx context.Context, req *model.ReadTODORequest) (*model.ReadTODOResponse, error) {
-	_, _ = h.svc.ReadTODO(ctx, 0, 0)
-	return &model.ReadTODOResponse{}, nil
+	todoPointers, _ := h.svc.ReadTODO(ctx,req.PrevID , req.Size)
+
+	todos := make([]model.TODO, 0)
+
+	for _, todo := range todoPointers {
+		todos = append(todos, *todo)
+}
+	return &model.ReadTODOResponse{
+		TODOs: todos,
+	}, nil
 }
 
 // Update handles the endpoint that updates the TODO.
@@ -52,13 +61,14 @@ func (h *TODOHandler) Delete(ctx context.Context, req *model.DeleteTODORequest) 
 
 func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request){
 	//HTTP メソッドが Post の場合を判定
-	if(r.Method == http.MethodPost){
+	switch r.Method{
+	case http.MethodPost:
 		serveHTTPPost(w,r,h)
-	}else if(r.Method == http.MethodPut){
+	case http.MethodPut:
 		serveHTTPPut(w,r,h)
-	}
-
-	
+	case http.MethodGet:
+		serveHTTPGet(w,r,h)
+	}	
 }
 
 func serveHTTPPost(w http.ResponseWriter, r *http.Request,h *TODOHandler){
@@ -124,6 +134,43 @@ func serveHTTPPut(w http.ResponseWriter, r *http.Request,h *TODOHandler){
 	err = json.NewEncoder(w).Encode(resp)
 	if(err != nil){
 		println(err)
+		return
+	}
+}
+
+func serveHTTPGet(w http.ResponseWriter, r *http.Request,h *TODOHandler){
+	prevIDStr := r.URL.Query().Get("prev_id")
+	prevID, err := strconv.Atoi(prevIDStr)
+	if(err != nil){
+		log.Println(err,"prev")
+		prevID = 0
+	}
+
+	sizeStr := r.URL.Query().Get("size")
+	size, err := strconv.Atoi(sizeStr)
+	if(err != nil){
+		log.Println(err,"size")
+		size = 5
+	}
+
+	request := model.ReadTODORequest{
+		PrevID: int64(prevID),
+		Size: int64(size),
+	}
+
+	context := r.Context()
+	resp,err := h.Read(context,&request)
+
+	if(err != nil){
+		log.Println(err)
+	  return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(resp)
+	if(err != nil){
+		log.Println(err)
 		return
 	}
 }

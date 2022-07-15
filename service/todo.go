@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/TechBowl-japan/go-stations/model"
 	"github.com/mattn/go-sqlite3"
@@ -57,7 +58,41 @@ func (s *TODOService) UpdateTODO(ctx context.Context, id int64, subject, descrip
 		confirm = `SELECT subject, description, created_at, updated_at FROM todos WHERE id = ?`
 	)
 
-	return nil, nil
+	var todo model.TODO
+	todo.ID = id
+
+	if subject == ""{
+		return &todo, sqlite3.ErrConstraint
+	}
+
+	stmt,err := s.db.PrepareContext(ctx,update)
+	if(err !=nil){
+		panic(err)
+	}
+	result,err :=stmt.ExecContext(ctx,subject,description,id)
+	if(err !=nil){
+		panic(err)
+	}
+
+	//ExecContext メソッドの戻り値から変更された Row の数を検査して、0 件だった場合は Station 11 で作成した ErrNotFound を返却するようにしよう
+	rowCount, err2 := result.RowsAffected()
+	if rowCount == 0{
+		return &todo, &model.ErrNotFound{
+			When: time.Now(),
+			What: "Updated row not found",
+		}
+	}else if(err2 != nil){
+		return &todo,err
+	}
+
+	row:= s.db.QueryRowContext(ctx,confirm,id)
+	err = row.Scan(&todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
+
+	if(err !=nil){
+		panic(err)
+	}
+
+	return &todo, nil
 }
 
 // DeleteTODO deletes TODOs on DB by ids.
